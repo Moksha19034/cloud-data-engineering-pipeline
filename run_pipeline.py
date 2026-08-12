@@ -4,9 +4,13 @@ from datetime import datetime, timezone
 
 
 STAGES = [
-    ("INGESTION", "src/ingestion/fetch_data.py"),
-    ("TRANSFORMATION", "src/transformation/transform_posts.py"),
-    ("VALIDATION", "src/validation/validate_posts.py"),
+    ("POST INGESTION", "src/ingestion/fetch_data.py"),
+    ("USER INGESTION", "src/ingestion/fetch_users.py"),
+    ("POST TRANSFORMATION", "src/transformation/transform_posts.py"),
+    ("USER TRANSFORMATION", "src/transformation/transform_users.py"),
+    ("POST VALIDATION", "src/validation/validate_posts.py"),
+    ("RELATIONSHIP VALIDATION", "src/validation/validate_relationships.py"),
+    ("ANALYTICS DATASET", "src/transformation/create_analytics_dataset.py"),
 ]
 
 
