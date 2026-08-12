@@ -19,7 +19,7 @@ def load_raw_data(file_path):
         return json.load(file)
 
 
-def transform_data(data):
+def transform_data(data, source_file):
     df = pd.DataFrame(data)
 
     df = df.rename(
@@ -32,6 +32,8 @@ def transform_data(data):
     df["title_length"] = df["title"].str.len()
     df["body_length"] = df["body"].str.len()
 
+    df["source_system"] = "jsonplaceholder_api"
+    df["source_file"] = str(source_file)
     df["processed_at"] = datetime.now(timezone.utc)
 
     return df
@@ -45,6 +47,8 @@ def validate_data(df):
         "body",
         "title_length",
         "body_length",
+        "source_system",
+        "source_file",
         "processed_at",
     }
 
@@ -80,7 +84,7 @@ def main():
 
     raw_data = load_raw_data(raw_file)
 
-    df = transform_data(raw_data)
+    df = transform_data(raw_data, raw_file)
 
     validate_data(df)
 
