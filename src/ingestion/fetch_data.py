@@ -11,7 +11,23 @@ from tenacity import retry, stop_after_attempt, wait_exponential, before_sleep_l
 
 load_dotenv()
 
+
+def get_int_config(name, default):
+    value = os.getenv(name, str(default))
+
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(
+            f"Invalid configuration: {name} must be an integer"
+        )
+
+
 API_URL = os.getenv("API_URL")
+API_TIMEOUT = get_int_config("API_TIMEOUT", 30)
+RETRY_ATTEMPTS = get_int_config("RETRY_ATTEMPTS", 3)
+RETRY_MIN_WAIT = get_int_config("RETRY_MIN_WAIT", 2)
+RETRY_MAX_WAIT = get_int_config("RETRY_MAX_WAIT", 10)
 
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -26,14 +42,14 @@ logger = logging.getLogger(__name__)
 
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
+    stop=stop_after_attempt(RETRY_ATTEMPTS),
+    wait=wait_exponential(multiplier=1, min=RETRY_MIN_WAIT, max=RETRY_MAX_WAIT),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
 def fetch_data():
     logger.info("Starting API request")
 
-    response = requests.get(API_URL, timeout=30)
+    response = requests.get(API_URL, timeout=API_TIMEOUT)
     response.raise_for_status()
 
     logger.info("API request successful")
