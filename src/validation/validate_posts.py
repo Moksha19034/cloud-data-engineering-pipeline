@@ -1,6 +1,9 @@
+import os
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 
 
 DATA_FILE = Path("data/curated/posts.parquet")
@@ -11,6 +14,27 @@ def load_data():
         raise FileNotFoundError(f"Data file not found: {DATA_FILE}")
 
     return pd.read_parquet(DATA_FILE)
+
+
+load_dotenv()
+
+DATA_FRESHNESS_HOURS = int(os.getenv("DATA_FRESHNESS_HOURS", "24"))
+
+
+def validate_freshness(df):
+    processed_at = pd.to_datetime(df["processed_at"], utc=True)
+    latest_processed_at = processed_at.max()
+    current_time = datetime.now(timezone.utc)
+    age = current_time - latest_processed_at.to_pydatetime()
+    max_age = timedelta(hours=DATA_FRESHNESS_HOURS)
+
+    if age > max_age:
+        raise ValueError(
+            f"Data freshness SLA violated: age={age}, "
+            f"maximum_allowed={max_age}"
+        )
+
+    print(f"✓ Data freshness check passed | age={age}")
 
 
 def validate_required_columns(df):
