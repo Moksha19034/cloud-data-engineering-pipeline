@@ -1,7 +1,21 @@
 import subprocess
 import sys
+import logging
+import time
+from pathlib import Path
 from datetime import datetime, timezone
 
+
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    filename=LOG_DIR / "pipeline.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 STAGES = [
     ("POST INGESTION", "src/ingestion/fetch_data.py"),
@@ -17,8 +31,10 @@ STAGES = [
 
 
 def run_stage(stage_name, script_path):
+    stage_start = time.perf_counter()
     print("\n" + "=" * 60)
     print(f"STARTING: {stage_name}")
+    logger.info(f"Starting stage | stage={stage_name}")
     print("=" * 60)
 
     result = subprocess.run(
@@ -33,6 +49,8 @@ def run_stage(stage_name, script_path):
         )
 
     print(f"\n✅ {stage_name} COMPLETED")
+    stage_duration = time.perf_counter() - stage_start
+    logger.info(f"Stage completed | stage={stage_name} | duration={stage_duration:.3f}s")
 
 
 def main():
@@ -41,6 +59,7 @@ def main():
     print("=" * 60)
     print("DATA ENGINEERING PIPELINE")
     print(f"Started: {start_time.isoformat()}")
+    logger.info("========== PIPELINE STARTED ==========")
     print("=" * 60)
 
     try:
@@ -51,6 +70,7 @@ def main():
 
         print("\n" + "=" * 60)
         print("🎉 PIPELINE COMPLETED SUCCESSFULLY")
+        logger.info("========== PIPELINE COMPLETED SUCCESSFULLY ==========")
         print(f"Finished: {end_time.isoformat()}")
         print("=" * 60)
 
@@ -61,6 +81,7 @@ def main():
         print("❌ PIPELINE FAILED")
         print(f"Finished: {end_time.isoformat()}")
         print(f"Error: {error}")
+        logger.exception("Pipeline failed")
         print("=" * 60)
 
         sys.exit(1)
