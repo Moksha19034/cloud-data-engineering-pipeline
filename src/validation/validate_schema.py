@@ -13,6 +13,8 @@ EXPECTED_COLUMNS = {
     "title_length": "int",
     "body_length": "int",
     "processed_at": "datetime",
+    "source_system": "string",
+    "source_file": "string",
 }
 
 

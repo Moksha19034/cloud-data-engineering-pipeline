@@ -30,6 +30,18 @@ STAGES = [
 ]
 
 
+def log_stage_summary(stage_durations):
+    fastest_stage = min(stage_durations, key=stage_durations.get)
+    slowest_stage = max(stage_durations, key=stage_durations.get)
+
+    logger.info(
+        f"Stage summary | "
+        f"total_stages={len(stage_durations)} | "
+        f"fastest={fastest_stage}:{stage_durations[fastest_stage]:.3f}s | "
+        f"slowest={slowest_stage}:{stage_durations[slowest_stage]:.3f}s"
+    )
+
+
 def run_stage(stage_name, script_path):
     stage_start = time.perf_counter()
 
@@ -88,6 +100,9 @@ def main():
             f"successful_stages={len(stage_durations)} | "
             f"total_duration={total_duration:.3f}s"
         )
+
+        log_stage_summary(stage_durations)
+
 
         print("\n" + "=" * 60)
         print("🎉 PIPELINE COMPLETED SUCCESSFULLY")
