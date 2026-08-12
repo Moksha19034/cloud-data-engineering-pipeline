@@ -9,11 +9,30 @@ INCOMING_FILE = Path("data/staging/posts.parquet")
 def upsert_posts():
     print("Starting upsert...")
 
-    existing = pd.read_parquet(EXISTING_FILE)
     incoming = pd.read_parquet(INCOMING_FILE)
 
-    print(f"Existing records: {len(existing)}")
     print(f"Incoming records: {len(incoming)}")
+
+    # First-run handling.
+    if not EXISTING_FILE.exists():
+        EXISTING_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        incoming.to_parquet(
+            EXISTING_FILE,
+            index=False,
+        )
+
+        print("No existing curated dataset found.")
+        print("Created curated dataset from incoming data.")
+        print(f"Final records: {len(incoming)}")
+        print("Upsert completed successfully.")
+
+        return
+
+    # Normal incremental load.
+    existing = pd.read_parquet(EXISTING_FILE)
+
+    print(f"Existing records: {len(existing)}")
 
     existing_indexed = existing.set_index("post_id")
     incoming_indexed = incoming.set_index("post_id")
@@ -58,3 +77,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+

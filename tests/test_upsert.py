@@ -104,7 +104,31 @@ def test_upsert_handles_update_and_insert(tmp_path):
 
     assert len(result) == 3
     assert result["post_id"].is_unique
+
     assert result.loc[
         result["post_id"] == 2, "title"
     ].iloc[0] == "Updated 2"
+
     assert 3 in result["post_id"].values
+
+
+def test_upsert_creates_file_on_first_run(tmp_path):
+    existing_file = tmp_path / "existing.parquet"
+    incoming_file = tmp_path / "incoming.parquet"
+
+    incoming = make_posts(
+        [1, 2],
+        ["First post", "Second post"],
+    )
+
+    incoming.to_parquet(incoming_file, index=False)
+
+    upsert_posts.EXISTING_FILE = existing_file
+    upsert_posts.INCOMING_FILE = incoming_file
+
+    upsert_posts.upsert_posts()
+
+    result = pd.read_parquet(existing_file)
+
+    assert len(result) == 2
+    assert result["post_id"].is_unique
