@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 EXISTING_FILE = Path("data/curated/posts.parquet")
-INCOMING_FILE = Path("/tmp/upsert_posts.parquet")
+INCOMING_FILE = Path("data/staging/posts.parquet")
 
 
 def upsert_posts():

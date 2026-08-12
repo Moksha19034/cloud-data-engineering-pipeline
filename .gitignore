@@ -11,3 +11,4 @@ data/curated/*
 logs/*
 .ipynb_checkpoints/
 .vscode/
+data/staging/*

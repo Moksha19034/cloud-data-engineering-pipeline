@@ -11,6 +11,7 @@ STAGES = [
     ("POST VALIDATION", "src/validation/validate_posts.py"),
     ("RELATIONSHIP VALIDATION", "src/validation/validate_relationships.py"),
     ("SCHEMA VALIDATION", "src/validation/validate_schema.py"),
+    ("INCREMENTAL LOAD", "src/loading/upsert_posts.py"),
     ("ANALYTICS DATASET", "src/transformation/create_analytics_dataset.py"),
 ]
 

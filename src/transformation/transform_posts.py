@@ -61,14 +61,14 @@ def validate_data(df):
 
 
 def save_parquet(df):
-    output_dir = Path("data/curated")
+    output_dir = Path("data/staging")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_file = output_dir / "posts.parquet"
 
     df.to_parquet(output_file, index=False)
 
-    print(f"Curated data saved to: {output_file}")
+    print(f"Staging data saved to: {output_file}")
 
 
 def main():
