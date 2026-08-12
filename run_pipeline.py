@@ -10,6 +10,7 @@ STAGES = [
     ("USER TRANSFORMATION", "src/transformation/transform_users.py"),
     ("POST VALIDATION", "src/validation/validate_posts.py"),
     ("RELATIONSHIP VALIDATION", "src/validation/validate_relationships.py"),
+    ("SCHEMA VALIDATION", "src/validation/validate_schema.py"),
     ("ANALYTICS DATASET", "src/transformation/create_analytics_dataset.py"),
 ]
 
