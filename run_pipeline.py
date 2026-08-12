@@ -32,9 +32,10 @@ STAGES = [
 
 def run_stage(stage_name, script_path):
     stage_start = time.perf_counter()
+
     print("\n" + "=" * 60)
     print(f"STARTING: {stage_name}")
-    logger.info(f"Starting stage | stage={stage_name}")
+    logger.info(f"Starting stage | stage={stage_name} | script={script_path}")
     print("=" * 60)
 
     result = subprocess.run(
@@ -42,15 +43,24 @@ def run_stage(stage_name, script_path):
         check=False,
     )
 
+    stage_duration = time.perf_counter() - stage_start
+
     if result.returncode != 0:
         print(f"\n❌ {stage_name} FAILED")
+        logger.error(
+            f"Stage failed | stage={stage_name} | script={script_path} | "
+            f"exit_code={result.returncode} | duration={stage_duration:.3f}s"
+        )
         raise RuntimeError(
-            f"Pipeline stopped because {stage_name} failed."
+            f"Pipeline stopped because {stage_name} failed "
+            f"(exit code {result.returncode})."
         )
 
     print(f"\n✅ {stage_name} COMPLETED")
-    stage_duration = time.perf_counter() - stage_start
-    logger.info(f"Stage completed | stage={stage_name} | duration={stage_duration:.3f}s")
+    logger.info(
+        f"Stage completed | stage={stage_name} | "
+        f"duration={stage_duration:.3f}s"
+    )
 
 
 def main():
