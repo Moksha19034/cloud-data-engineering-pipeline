@@ -12,3 +12,4 @@ logs/*
 .ipynb_checkpoints/
 .vscode/
 data/staging/*
+data/audit/*
