@@ -132,3 +132,31 @@ def test_upsert_creates_file_on_first_run(tmp_path):
 
     assert len(result) == 2
     assert result["post_id"].is_unique
+
+def test_upsert_reports_insert_update_and_unchanged_counts(tmp_path, capsys):
+    existing_file = tmp_path / "existing.parquet"
+    incoming_file = tmp_path / "incoming.parquet"
+
+    existing = make_posts(
+        [1, 2],
+        ["Original 1", "Original 2"],
+    )
+
+    incoming = make_posts(
+        [1, 2, 3],
+        ["Original 1", "Updated 2", "New 3"],
+    )
+
+    existing.to_parquet(existing_file, index=False)
+    incoming.to_parquet(incoming_file, index=False)
+
+    upsert_posts.EXISTING_FILE = existing_file
+    upsert_posts.INCOMING_FILE = incoming_file
+
+    upsert_posts.upsert_posts()
+
+    output = capsys.readouterr().out
+
+    assert "Records updated: 1" in output
+    assert "Records inserted: 1" in output
+    assert "Records unchanged: 1" in output
