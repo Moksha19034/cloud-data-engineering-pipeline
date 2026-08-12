@@ -61,6 +61,7 @@ def run_stage(stage_name, script_path):
         f"Stage completed | stage={stage_name} | "
         f"duration={stage_duration:.3f}s"
     )
+    return stage_duration
 
 
 def main():
@@ -73,10 +74,20 @@ def main():
     print("=" * 60)
 
     try:
+        stage_durations = {}
+
         for stage_name, script_path in STAGES:
-            run_stage(stage_name, script_path)
+            duration = run_stage(stage_name, script_path)
+            stage_durations[stage_name] = duration
 
         end_time = datetime.now(timezone.utc)
+        total_duration = sum(stage_durations.values())
+
+        logger.info(
+            f"Pipeline metrics | stages={len(stage_durations)} | "
+            f"successful_stages={len(stage_durations)} | "
+            f"total_duration={total_duration:.3f}s"
+        )
 
         print("\n" + "=" * 60)
         print("🎉 PIPELINE COMPLETED SUCCESSFULLY")
@@ -86,7 +97,6 @@ def main():
 
     except Exception as error:
         end_time = datetime.now(timezone.utc)
-
         print("\n" + "=" * 60)
         print("❌ PIPELINE FAILED")
         print(f"Finished: {end_time.isoformat()}")
