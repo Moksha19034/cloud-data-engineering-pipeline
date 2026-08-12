@@ -57,9 +57,7 @@ def run_pipeline():
 
             stage_durations[stage_name] = duration
 
-        total_duration = sum(
-            stage_durations.values()
-        )
+        total_duration = sum(stage_durations.values())
 
         return {
             "status": "SUCCESS",
@@ -71,9 +69,7 @@ def run_pipeline():
         }
 
     except Exception as error:
-        total_duration = sum(
-            stage_durations.values()
-        )
+        total_duration = sum(stage_durations.values())
 
         failed_stage = (
             STAGES[len(stage_durations)][0]
@@ -109,10 +105,7 @@ def main():
     )
 
     if result["failed_stage"]:
-        print(
-            f"Failed stage: "
-            f"{result['failed_stage']}"
-        )
+        print(f"Failed stage: {result['failed_stage']}")
 
     print("Pipeline orchestration completed.")
 
