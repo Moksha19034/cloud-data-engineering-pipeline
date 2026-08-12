@@ -11,6 +11,11 @@ from src.audit.pipeline_audit import (
     save_audit_record,
 )
 
+from src.audit.pipeline_alert import (
+    create_alert,
+    format_alert,
+    save_alert,
+)
 
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)

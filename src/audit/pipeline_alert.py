@@ -1,3 +1,11 @@
+from pathlib import Path
+
+import pandas as pd
+
+
+ALERT_FILE = Path("data/audit/pipeline_alerts.parquet")
+
+
 def create_alert(
     status,
     run_id,
@@ -69,6 +77,40 @@ def format_alert(alert):
         )
 
     return "\n".join(message)
+
+
+def save_alert(alert):
+    """
+    Save an alert to the alert history dataset.
+
+    Creates the file if it does not exist.
+    Appends to the existing file if it does exist.
+    """
+
+    if alert is None:
+        return
+
+    ALERT_FILE.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    new_alert = pd.DataFrame([alert])
+
+    if ALERT_FILE.exists():
+        existing = pd.read_parquet(ALERT_FILE)
+
+        result = pd.concat(
+            [existing, new_alert],
+            ignore_index=True,
+        )
+    else:
+        result = new_alert
+
+    result.to_parquet(
+        ALERT_FILE,
+        index=False,
+    )
 
 
 def main():
