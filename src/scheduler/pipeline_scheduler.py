@@ -38,22 +38,22 @@ def run_scheduler(
 
     Recovery behavior:
         - A previously successful run is skipped.
-        - A previously failed run can be retried.
+        - A failed run can be retried.
         - Retries stop after max_retries.
-        - stop_on_failure stops scheduling after a failed run.
+        - stop_on_failure stops immediately after a failure.
 
     Args:
         interval_minutes:
             Interval between pipeline executions.
 
         stop_on_failure:
-            Stop scheduling after a failed run.
+            Stop scheduling immediately after a failed run.
 
         max_runs:
-            Optional maximum number of scheduled executions.
+            Maximum number of pipeline executions.
 
         max_retries:
-            Maximum number of retries for a failed run.
+            Maximum number of retries after a failure.
 
     Returns:
         Dictionary containing execution statistics.
@@ -80,7 +80,7 @@ def run_scheduler(
     previous_state = load_state()
 
     # --------------------------------------------------
-    # RECOVERY / IDEMPOTENCY CHECK
+    # PREVIOUS RUN / IDEMPOTENCY CHECK
     # --------------------------------------------------
 
     if should_skip_run(previous_state):
@@ -107,16 +107,30 @@ def run_scheduler(
 
             runs += 1
 
+            # ------------------------------------------
+            # SUCCESS
+            # ------------------------------------------
+
             if result["status"] == "SUCCESS":
                 break
 
+            # ------------------------------------------
+            # FAILURE
+            # ------------------------------------------
+
             failures += 1
+
+            # stop_on_failure has priority over retries
+            if stop_on_failure:
+                break
 
             # ------------------------------------------
             # FAILURE RECOVERY
             # ------------------------------------------
 
-            current_state = load_state()
+            current_state = {
+                "last_status": "FAILED",
+            }
 
             if not should_retry(
                 current_state,
@@ -136,6 +150,12 @@ def run_scheduler(
             if stop_on_failure:
                 break
 
+            # If retries were exhausted, stop this scheduler
+            # execution rather than immediately starting another
+            # scheduled run from the same failure.
+            if retry_count >= max_retries:
+                break
+
         # --------------------------------------------------
         # MAX RUNS
         # --------------------------------------------------
@@ -152,7 +172,7 @@ def run_scheduler(
         )
 
         # --------------------------------------------------
-        # REFRESH STATE BEFORE NEXT RUN
+        # REFRESH PREVIOUS STATE
         # --------------------------------------------------
 
         previous_state = load_state()
