@@ -106,3 +106,101 @@ def get_pipeline_metrics(df):
         "average_duration": get_average_duration(df),
     }
 
+def get_fastest_stage(stage_durations):
+    """
+    Return the fastest pipeline stage.
+    """
+
+    if not stage_durations:
+        return None
+
+    stage = min(
+        stage_durations,
+        key=stage_durations.get,
+    )
+
+    return {
+        "stage": stage,
+        "duration": stage_durations[stage],
+    }
+
+
+def get_slowest_stage(stage_durations):
+    """
+    Return the slowest pipeline stage.
+    """
+
+    if not stage_durations:
+        return None
+
+    stage = max(
+        stage_durations,
+        key=stage_durations.get,
+    )
+
+    return {
+        "stage": stage,
+        "duration": stage_durations[stage],
+    }
+
+
+def get_average_stage_duration(stage_durations):
+    """
+    Return the average duration of pipeline stages.
+    """
+
+    if not stage_durations:
+        return 0.0
+
+    return sum(
+        stage_durations.values()
+    ) / len(stage_durations)
+
+
+def get_slow_stages(
+    stage_durations,
+    threshold,
+):
+    """
+    Return stages whose duration exceeds the threshold.
+    """
+
+    if not stage_durations:
+        return {}
+
+    return {
+        stage: duration
+        for stage, duration in stage_durations.items()
+        if duration > threshold
+    }
+
+
+def get_stage_metrics(stage_durations):
+    """
+    Return a summary of stage-level performance.
+    """
+
+    if not stage_durations:
+        return {
+            "total_stages": 0,
+            "fastest_stage": None,
+            "slowest_stage": None,
+            "fastest_duration": 0.0,
+            "slowest_duration": 0.0,
+        }
+
+    fastest = get_fastest_stage(
+        stage_durations
+    )
+
+    slowest = get_slowest_stage(
+        stage_durations
+    )
+
+    return {
+        "total_stages": len(stage_durations),
+        "fastest_stage": fastest["stage"],
+        "slowest_stage": slowest["stage"],
+        "fastest_duration": fastest["duration"],
+        "slowest_duration": slowest["duration"],
+    }
