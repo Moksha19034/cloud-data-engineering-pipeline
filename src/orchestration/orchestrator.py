@@ -2,6 +2,8 @@ import subprocess
 import sys
 import time
 
+from src.state.pipeline_state import save_state
+
 
 STAGES = [
     ("POST INGESTION", "src/ingestion/fetch_data.py"),
@@ -39,11 +41,13 @@ def run_stage(stage_name, script_path):
     return duration
 
 
-def run_pipeline():
+def run_pipeline(run_id=None):
     """
     Execute all pipeline stages sequentially.
 
     Stops immediately when a stage fails.
+
+    The latest pipeline state is saved after completion.
     """
 
     stage_durations = {}
@@ -57,9 +61,11 @@ def run_pipeline():
 
             stage_durations[stage_name] = duration
 
-        total_duration = sum(stage_durations.values())
+        total_duration = sum(
+            stage_durations.values()
+        )
 
-        return {
+        result = {
             "status": "SUCCESS",
             "total_duration": total_duration,
             "total_stages": len(STAGES),
@@ -68,8 +74,21 @@ def run_pipeline():
             "stage_durations": stage_durations,
         }
 
+        if run_id is not None:
+            save_state(
+                {
+                    "last_run_id": run_id,
+                    "last_status": "SUCCESS",
+                    "last_finished_at": None,
+                }
+            )
+
+        return result
+
     except Exception as error:
-        total_duration = sum(stage_durations.values())
+        total_duration = sum(
+            stage_durations.values()
+        )
 
         failed_stage = (
             STAGES[len(stage_durations)][0]
@@ -77,7 +96,7 @@ def run_pipeline():
             else None
         )
 
-        return {
+        result = {
             "status": "FAILED",
             "total_duration": total_duration,
             "total_stages": len(STAGES),
@@ -87,27 +106,50 @@ def run_pipeline():
             "stage_durations": stage_durations,
         }
 
+        if run_id is not None:
+            save_state(
+                {
+                    "last_run_id": run_id,
+                    "last_status": "FAILED",
+                    "last_finished_at": None,
+                    "failed_stage": failed_stage,
+                    "error": str(error),
+                }
+            )
+
+        return result
+
 
 def main():
     print("Starting pipeline orchestration...")
 
     result = run_pipeline()
 
-    print(f"Pipeline status: {result['status']}")
+    print(
+        f"Pipeline status: "
+        f"{result['status']}"
+    )
+
     print(
         f"Stages: "
         f"{result['successful_stages']}/"
         f"{result['total_stages']}"
     )
+
     print(
         f"Duration: "
         f"{result['total_duration']:.3f}s"
     )
 
     if result["failed_stage"]:
-        print(f"Failed stage: {result['failed_stage']}")
+        print(
+            f"Failed stage: "
+            f"{result['failed_stage']}"
+        )
 
-    print("Pipeline orchestration completed.")
+    print(
+        "Pipeline orchestration completed."
+    )
 
 
 if __name__ == "__main__":
