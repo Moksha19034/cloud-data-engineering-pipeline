@@ -115,3 +115,32 @@ def test_run_pipeline_includes_stage_metrics(monkeypatch):
         result["stage_metrics"]["slowest_duration"]
         == 3.0
     )
+
+def test_run_pipeline_includes_quality_metrics(monkeypatch):
+    quality_metrics = {
+        "records_checked": 102,
+        "null_values": 0,
+        "duplicate_post_ids": 0,
+        "quality_status": "PASSED",
+    }
+
+    def fake_run_stage(stage_name, script_path):
+        return 1.0
+
+    monkeypatch.setattr(
+        orchestrator,
+        "run_stage",
+        fake_run_stage,
+    )
+
+    monkeypatch.setattr(
+        orchestrator,
+        "load_quality_metrics",
+        lambda: quality_metrics,
+    )
+
+    result = orchestrator.run_pipeline()
+
+    assert result["status"] == "SUCCESS"
+
+    assert result["quality_metrics"] == quality_metrics
