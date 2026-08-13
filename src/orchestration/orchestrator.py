@@ -2,7 +2,7 @@ import subprocess
 import sys
 import time
 
-from src.state.pipeline_state import save_state
+from src.audit.pipeline_metrics import get_stage_metrics
 
 
 STAGES = [
@@ -11,10 +11,16 @@ STAGES = [
     ("POST TRANSFORMATION", "src/transformation/transform_posts.py"),
     ("USER TRANSFORMATION", "src/transformation/transform_users.py"),
     ("POST VALIDATION", "src/validation/validate_posts.py"),
-    ("RELATIONSHIP VALIDATION", "src/validation/validate_relationships.py"),
+    (
+        "RELATIONSHIP VALIDATION",
+        "src/validation/validate_relationships.py",
+    ),
     ("SCHEMA VALIDATION", "src/validation/validate_schema.py"),
     ("INCREMENTAL LOAD", "src/loading/upsert_posts.py"),
-    ("ANALYTICS DATASET", "src/transformation/create_analytics_dataset.py"),
+    (
+        "ANALYTICS DATASET",
+        "src/transformation/create_analytics_dataset.py",
+    ),
 ]
 
 
@@ -41,13 +47,15 @@ def run_stage(stage_name, script_path):
     return duration
 
 
-def run_pipeline(run_id=None):
+def run_pipeline():
     """
     Execute all pipeline stages sequentially.
 
     Stops immediately when a stage fails.
 
-    The latest pipeline state is saved after completion.
+    Returns:
+        Dictionary containing pipeline execution
+        and stage-performance information.
     """
 
     stage_durations = {}
@@ -65,25 +73,19 @@ def run_pipeline(run_id=None):
             stage_durations.values()
         )
 
-        result = {
+        stage_metrics = get_stage_metrics(
+            stage_durations
+        )
+
+        return {
             "status": "SUCCESS",
             "total_duration": total_duration,
             "total_stages": len(STAGES),
             "successful_stages": len(stage_durations),
             "failed_stage": None,
             "stage_durations": stage_durations,
+            "stage_metrics": stage_metrics,
         }
-
-        if run_id is not None:
-            save_state(
-                {
-                    "last_run_id": run_id,
-                    "last_status": "SUCCESS",
-                    "last_finished_at": None,
-                }
-            )
-
-        return result
 
     except Exception as error:
         total_duration = sum(
@@ -96,7 +98,11 @@ def run_pipeline(run_id=None):
             else None
         )
 
-        result = {
+        stage_metrics = get_stage_metrics(
+            stage_durations
+        )
+
+        return {
             "status": "FAILED",
             "total_duration": total_duration,
             "total_stages": len(STAGES),
@@ -104,20 +110,8 @@ def run_pipeline(run_id=None):
             "failed_stage": failed_stage,
             "error": str(error),
             "stage_durations": stage_durations,
+            "stage_metrics": stage_metrics,
         }
-
-        if run_id is not None:
-            save_state(
-                {
-                    "last_run_id": run_id,
-                    "last_status": "FAILED",
-                    "last_finished_at": None,
-                    "failed_stage": failed_stage,
-                    "error": str(error),
-                }
-            )
-
-        return result
 
 
 def main():
@@ -126,8 +120,7 @@ def main():
     result = run_pipeline()
 
     print(
-        f"Pipeline status: "
-        f"{result['status']}"
+        f"Pipeline status: {result['status']}"
     )
 
     print(
@@ -145,6 +138,21 @@ def main():
         print(
             f"Failed stage: "
             f"{result['failed_stage']}"
+        )
+
+    stage_metrics = result["stage_metrics"]
+
+    if stage_metrics["total_stages"] > 0:
+        print(
+            f"Fastest stage: "
+            f"{stage_metrics['fastest_stage']} "
+            f"({stage_metrics['fastest_duration']:.3f}s)"
+        )
+
+        print(
+            f"Slowest stage: "
+            f"{stage_metrics['slowest_stage']} "
+            f"({stage_metrics['slowest_duration']:.3f}s)"
         )
 
     print(
