@@ -90,3 +90,51 @@ def test_save_audit_record_appends_records(tmp_path):
         "run-001",
         "run-002",
     ]
+
+def test_create_audit_record_includes_metrics():
+    stage_metrics = {
+        "total_stages": 9,
+        "fastest_stage": "POST VALIDATION",
+        "fastest_duration": 0.4,
+        "slowest_stage": "POST INGESTION",
+        "slowest_duration": 2.1,
+    }
+
+    quality_metrics = {
+        "records_checked": 102,
+        "null_values": 0,
+        "duplicate_post_ids": 0,
+        "quality_status": "PASSED",
+    }
+
+    record = pipeline_audit.create_audit_record(
+        run_id="metrics-test-001",
+        started_at="2026-08-16T14:00:00+00:00",
+        finished_at="2026-08-16T14:00:05+00:00",
+        status="SUCCESS",
+        total_duration=5.0,
+        total_stages=9,
+        successful_stages=9,
+        stage_metrics=stage_metrics,
+        quality_metrics=quality_metrics,
+    )
+
+    assert record["fastest_stage"] == (
+        "POST VALIDATION"
+    )
+
+    assert record["fastest_duration"] == 0.4
+
+    assert record["slowest_stage"] == (
+        "POST INGESTION"
+    )
+
+    assert record["slowest_duration"] == 2.1
+
+    assert record["records_checked"] == 102
+
+    assert record["null_values"] == 0
+
+    assert record["duplicate_post_ids"] == 0
+
+    assert record["quality_status"] == "PASSED"
