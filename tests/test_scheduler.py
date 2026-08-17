@@ -268,3 +268,89 @@ def test_scheduler_skips_successful_previous_run(monkeypatch):
     assert result["failures"] == 0
     assert result["retries"] == 0
     assert result["skipped_runs"] == 1
+def test_scheduler_failure_to_success_recovery(tmp_path, monkeypatch):
+    """
+    Verify a failed pipeline run is retried and the final
+    successful state is persisted.
+    """
+
+    from src.state import pipeline_state
+
+    state_file = tmp_path / "pipeline_state.json"
+
+    monkeypatch.setattr(
+        pipeline_state,
+        "STATE_FILE",
+        state_file,
+    )
+
+    monkeypatch.setattr(
+        pipeline_scheduler,
+        "load_state",
+        pipeline_state.load_state,
+    )
+
+    pipeline_state.save_state(
+        {
+            "last_run_id": "run-previous",
+            "last_status": "FAILED",
+            "failed_stage": "POST INGESTION",
+            "error": "Temporary API failure",
+        }
+    )
+
+    executions = []
+
+    def fake_pipeline():
+        executions.append(len(executions) + 1)
+
+        if len(executions) == 1:
+            pipeline_state.save_state(
+                {
+                    "last_run_id": "run-failed",
+                    "last_status": "FAILED",
+                    "failed_stage": "POST INGESTION",
+                    "error": "Temporary API failure",
+                }
+            )
+
+            return {
+                "status": "FAILED",
+                "total_duration": 1.0,
+            }
+
+        pipeline_state.save_state(
+            {
+                "last_run_id": "run-success",
+                "last_status": "SUCCESS",
+                "last_finished_at": "2026-08-17T08:10:00+00:00",
+            }
+        )
+
+        return {
+            "status": "SUCCESS",
+            "total_duration": 1.0,
+        }
+
+    monkeypatch.setattr(
+        pipeline_scheduler,
+        "orchestrate_pipeline",
+        fake_pipeline,
+    )
+
+    result = pipeline_scheduler.run_scheduler(
+        interval_minutes=30,
+        max_retries=3,
+        max_runs=1,
+    )
+
+    final_state = pipeline_state.load_state()
+
+    assert executions == [1, 2]
+
+    assert result["runs"] == 2
+    assert result["failures"] == 1
+    assert result["retries"] == 1
+
+    assert final_state["last_status"] == "SUCCESS"
+    assert final_state["last_run_id"] == "run-success"
