@@ -75,6 +75,7 @@ jobs:
             -e ENVIRONMENT=ci \
             -e MAX_RETRIES=3 \
             -e INITIAL_RETRY_DELAY=1 \
+            -e API_URL=https://jsonplaceholder.typicode.com/posts \
             -e POSTS_API_URL=https://jsonplaceholder.typicode.com/posts \
             -e USERS_API_URL=https://jsonplaceholder.typicode.com/users \
             cloud-data-engineering-pipeline:ci
