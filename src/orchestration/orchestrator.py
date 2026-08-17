@@ -5,6 +5,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.config import settings
+
 from src.audit.pipeline_audit import (
     create_audit_record,
     generate_run_id,
@@ -23,6 +25,10 @@ from src.audit.stage_audit import (
 from src.alerting.pipeline_alerts import (
     alert_pipeline_failure,
     alert_retry_exhausted,
+)
+
+from src.logging.pipeline_logger import (
+    get_logger,
 )
 
 from src.orchestration.failure_classifier import (
@@ -86,9 +92,11 @@ STAGES = [
 # RETRY CONFIGURATION
 # =========================================================
 
-MAX_RETRIES = 3
+MAX_RETRIES = settings.MAX_RETRIES
 
-INITIAL_RETRY_DELAY = 1.0
+INITIAL_RETRY_DELAY = (
+    settings.INITIAL_RETRY_DELAY
+)
 
 
 # Only external-system stages are retried.
@@ -134,15 +142,12 @@ def run_stage(
     )
 
     if existing_python_path:
-
         environment["PYTHONPATH"] = (
             f"{project_root}"
             f"{os.pathsep}"
             f"{existing_python_path}"
         )
-
     else:
-
         environment["PYTHONPATH"] = (
             str(project_root)
         )
@@ -163,7 +168,6 @@ def run_stage(
     )
 
     if result.returncode != 0:
-
         raise RuntimeError(
             f"{stage_name} failed "
             f"(exit code "
@@ -186,15 +190,6 @@ def run_stage_with_retry(
 
     Only configured transient stages
     are retried.
-
-    Returns:
-        Dictionary containing:
-
-        status
-        duration
-        attempts
-        retries
-        error
     """
 
     should_retry = (
@@ -202,9 +197,7 @@ def run_stage_with_retry(
     )
 
     def execute_stage():
-
         try:
-
             return run_stage(
                 stage_name,
                 script_path,
@@ -213,7 +206,6 @@ def run_stage_with_retry(
         except RuntimeError as error:
 
             if should_retry:
-
                 raise ConnectionError(
                     str(error)
                 ) from error
@@ -239,8 +231,8 @@ def save_stage_audit(
     stage_durations,
 ):
     """
-    Convert stage durations into audit records
-    and persist them.
+    Convert stage durations into audit
+    records and persist them.
     """
 
     records = create_stage_audit_records(
@@ -271,13 +263,24 @@ def run_pipeline():
         - retry information
         - quality metrics
         - alerts
+        - structured logs
     """
 
     run_id = generate_run_id()
 
+    logger = get_logger(
+        name=f"pipeline_{run_id}",
+        run_id=run_id,
+        stage="PIPELINE",
+    )
+
     started_at = datetime.now(
         timezone.utc
     ).isoformat()
+
+    logger.info(
+        "Starting pipeline orchestration"
+    )
 
     stage_durations = {}
 
@@ -291,9 +294,20 @@ def run_pipeline():
 
         for stage_name, script_path in STAGES:
 
+            logger.info(
+                f"Starting stage: {stage_name}"
+            )
+
+            stage_start = time.perf_counter()
+
             retry_result = run_stage_with_retry(
                 stage_name,
                 script_path,
+            )
+
+            stage_elapsed = (
+                time.perf_counter()
+                - stage_start
             )
 
             retry_information[
@@ -331,15 +345,27 @@ def run_pipeline():
                         error=error,
                     )
 
+                logger.error(
+                    f"Stage failed: {stage_name}"
+                )
+
                 raise error
 
             duration = retry_result[
                 "result"
             ]
 
+            # Use the duration returned by
+            # the actual stage execution.
             stage_durations[
                 stage_name
             ] = duration
+
+            logger.info(
+                f"Stage completed: "
+                f"{stage_name} "
+                f"duration={stage_elapsed:.3f}s"
+            )
 
         # =================================================
         # PIPELINE SUCCESS
@@ -362,7 +388,7 @@ def run_pipeline():
         )
 
         # =================================================
-        # DATA QUALITY
+        # DATA QUALITY METRICS
         # =================================================
 
         quality_metrics = (
@@ -370,38 +396,47 @@ def run_pipeline():
         )
 
         # =================================================
+        # DATA QUALITY ALERT
+        # =================================================
+
+        if (
+            quality_metrics
+            and quality_metrics.get(
+                "quality_status"
+            ) != "PASSED"
+        ):
+
+            alert_data_quality = (
+                __import__(
+                    "src.alerting.pipeline_alerts",
+                    fromlist=[
+                        "alert_data_quality_failure"
+                    ],
+                )
+            )
+
+            alert_data_quality.alert_data_quality_failure(
+                run_id=run_id,
+                quality_metrics=quality_metrics,
+            )
+
+        # =================================================
         # SUCCESS RESULT
         # =================================================
 
         result = {
             "status": "SUCCESS",
-
-            "total_duration":
-                total_duration,
-
-            "total_stages":
-                len(STAGES),
-
-            "successful_stages":
-                len(stage_durations),
-
-            "failed_stage":
-                None,
-
-            "error":
-                None,
-
-            "stage_durations":
-                stage_durations,
-
-            "stage_metrics":
-                stage_metrics,
-
-            "quality_metrics":
-                quality_metrics,
-
-            "retry_information":
-                retry_information,
+            "total_duration": total_duration,
+            "total_stages": len(STAGES),
+            "successful_stages": len(
+                stage_durations
+            ),
+            "failed_stage": None,
+            "error": None,
+            "stage_durations": stage_durations,
+            "stage_metrics": stage_metrics,
+            "quality_metrics": quality_metrics,
+            "retry_information": retry_information,
         }
 
         # =================================================
@@ -445,13 +480,19 @@ def run_pipeline():
 
         result["run_id"] = run_id
 
+        logger.info(
+            "Pipeline orchestration completed "
+            f"successfully in "
+            f"{total_duration:.3f}s"
+        )
+
         return result
 
-    # =====================================================
-    # PIPELINE FAILURE
-    # =====================================================
-
     except Exception as error:
+
+        # =================================================
+        # FAILURE INFORMATION
+        # =================================================
 
         finished_at = datetime.now(
             timezone.utc
@@ -460,10 +501,6 @@ def run_pipeline():
         total_duration = sum(
             stage_durations.values()
         )
-
-        # ---------------------------------------------
-        # DETERMINE FAILED STAGE
-        # ---------------------------------------------
 
         failed_stage = None
 
@@ -476,72 +513,62 @@ def run_pipeline():
                 len(stage_durations)
             ][0]
 
-        # ---------------------------------------------
-        # CREATE PIPELINE FAILURE ALERT
-        # ---------------------------------------------
-
-        if failed_stage:
-
-            alert_pipeline_failure(
-                run_id=run_id,
-                failed_stage=failed_stage,
-                error=error,
-            )
-
-        # ---------------------------------------------
-        # STAGE METRICS
-        # ---------------------------------------------
+        # =================================================
+        # METRICS FOR COMPLETED STAGES
+        # =================================================
 
         stage_metrics = get_stage_metrics(
             stage_durations
         )
 
-        # ---------------------------------------------
+        # =================================================
         # QUALITY METRICS
-        # ---------------------------------------------
+        # =================================================
 
-        quality_metrics = (
-            load_quality_metrics()
+        try:
+            quality_metrics = (
+                load_quality_metrics()
+            )
+        except Exception:
+            quality_metrics = {}
+
+        # =================================================
+        # PIPELINE FAILURE ALERT
+        # =================================================
+
+        alert_pipeline_failure(
+            run_id=run_id,
+            failed_stage=failed_stage,
+            error=error,
         )
 
-        # ---------------------------------------------
+        logger.error(
+            f"Pipeline failed during "
+            f"{failed_stage}: {error}"
+        )
+
+        # =================================================
         # FAILED RESULT
-        # ---------------------------------------------
+        # =================================================
 
         result = {
             "status": "FAILED",
-
-            "total_duration":
-                total_duration,
-
-            "total_stages":
-                len(STAGES),
-
-            "successful_stages":
-                len(stage_durations),
-
-            "failed_stage":
-                failed_stage,
-
-            "error":
-                str(error),
-
-            "stage_durations":
-                stage_durations,
-
-            "stage_metrics":
-                stage_metrics,
-
-            "quality_metrics":
-                quality_metrics,
-
-            "retry_information":
-                retry_information,
+            "total_duration": total_duration,
+            "total_stages": len(STAGES),
+            "successful_stages": len(
+                stage_durations
+            ),
+            "failed_stage": failed_stage,
+            "error": str(error),
+            "stage_durations": stage_durations,
+            "stage_metrics": stage_metrics,
+            "quality_metrics": quality_metrics,
+            "retry_information": retry_information,
         }
 
-        # ---------------------------------------------
-        # FAILED PIPELINE AUDIT
-        # ---------------------------------------------
+        # =================================================
+        # FAILED AUDIT RECORD
+        # =================================================
 
         audit_record = create_audit_record(
             run_id=run_id,
@@ -569,9 +596,9 @@ def run_pipeline():
             audit_record
         )
 
-        # ---------------------------------------------
+        # =================================================
         # SAVE COMPLETED STAGES
-        # ---------------------------------------------
+        # =================================================
 
         save_stage_audit(
             run_id=run_id,
@@ -616,56 +643,14 @@ def main():
         f"{result['total_duration']:.3f}s"
     )
 
-    if result["failed_stage"]:
+    if result.get(
+        "failed_stage"
+    ):
 
         print(
             f"Failed stage: "
             f"{result['failed_stage']}"
         )
-
-    if result["error"]:
-
-        print(
-            f"Error: "
-            f"{result['error']}"
-        )
-
-    # =====================================================
-    # STAGE METRICS
-    # =====================================================
-
-    stage_metrics = result.get(
-        "stage_metrics",
-        {},
-    )
-
-    if stage_metrics.get(
-        "fastest_stage"
-    ):
-
-        print(
-            f"Fastest stage: "
-            f"{stage_metrics['fastest_stage']} "
-            f"("
-            f"{stage_metrics['fastest_duration']:.3f}s"
-            f")"
-        )
-
-    if stage_metrics.get(
-        "slowest_stage"
-    ):
-
-        print(
-            f"Slowest stage: "
-            f"{stage_metrics['slowest_stage']} "
-            f"("
-            f"{stage_metrics['slowest_duration']:.3f}s"
-            f")"
-        )
-
-    # =====================================================
-    # RETRY INFORMATION
-    # =====================================================
 
     retry_information = result.get(
         "retry_information",
@@ -673,12 +658,11 @@ def main():
     )
 
     total_retries = sum(
-        information.get(
+        item.get(
             "retries",
             0,
         )
-        for information
-        in retry_information.values()
+        for item in retry_information.values()
     )
 
     print()
@@ -691,25 +675,6 @@ def main():
         f"Total retries: "
         f"{total_retries}"
     )
-
-    for (
-        stage_name,
-        information,
-    ) in retry_information.items():
-
-        if information["retries"] > 0:
-
-            print(
-                f"{stage_name}: "
-                f"{information['retries']} "
-                f"retry(s), "
-                f"{information['attempts']} "
-                f"attempt(s)"
-            )
-
-    # =====================================================
-    # DATA QUALITY
-    # =====================================================
 
     quality_metrics = result.get(
         "quality_metrics",
@@ -725,23 +690,35 @@ def main():
         )
 
         print(
-            "Records checked: "
-            f"{quality_metrics.get('records_checked', 0)}"
+            f"Records checked: "
+            f"{quality_metrics.get(
+                'records_checked',
+                0
+            )}"
         )
 
         print(
-            "Null values: "
-            f"{quality_metrics.get('null_values', 0)}"
+            f"Null values: "
+            f"{quality_metrics.get(
+                'null_values',
+                0
+            )}"
         )
 
         print(
-            "Duplicate post IDs: "
-            f"{quality_metrics.get('duplicate_post_ids', 0)}"
+            f"Duplicate post IDs: "
+            f"{quality_metrics.get(
+                'duplicate_post_ids',
+                0
+            )}"
         )
 
         print(
-            "Quality status: "
-            f"{quality_metrics.get('quality_status', 'UNKNOWN')}"
+            f"Quality status: "
+            f"{quality_metrics.get(
+                'quality_status',
+                'UNKNOWN'
+            )}"
         )
 
     print(
