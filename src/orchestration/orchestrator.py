@@ -31,6 +31,8 @@ from src.logging.pipeline_logger import (
     get_logger,
 )
 
+from src.state.pipeline_state import save_state
+
 from src.orchestration.failure_classifier import (
     is_retryable,
 )
@@ -478,6 +480,14 @@ def run_pipeline():
             stage_durations=stage_durations,
         )
 
+        save_state(
+            {
+                "last_run_id": run_id,
+                "last_status": "SUCCESS",
+                "last_finished_at": finished_at,
+            }
+        )
+
         result["run_id"] = run_id
 
         logger.info(
@@ -603,6 +613,16 @@ def run_pipeline():
         save_stage_audit(
             run_id=run_id,
             stage_durations=stage_durations,
+        )
+
+        save_state(
+            {
+                "last_run_id": run_id,
+                "last_status": "FAILED",
+                "last_finished_at": finished_at,
+                "failed_stage": failed_stage,
+                "error": str(error),
+            }
         )
 
         result["run_id"] = run_id

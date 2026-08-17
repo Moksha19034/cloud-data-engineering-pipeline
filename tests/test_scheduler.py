@@ -42,12 +42,22 @@ def test_scheduler_runs_pipeline(monkeypatch):
     assert result["status"] == "SUCCESS"
     assert executed == [True]
 
+
 def test_scheduler_runs_multiple_times(monkeypatch):
+    # Prevent real pipeline state from causing this unit test
+    # to skip execution.
+    monkeypatch.setattr(
+        pipeline_scheduler,
+        "load_state",
+        lambda: None,
+    )
+
     executions = []
     sleeps = []
 
     def fake_pipeline():
         executions.append(len(executions) + 1)
+
         return {
             "status": "SUCCESS",
             "total_duration": 1.0,
@@ -83,6 +93,14 @@ def test_scheduler_runs_multiple_times(monkeypatch):
 
 
 def test_scheduler_stops_after_pipeline_failure(monkeypatch):
+    # Prevent real pipeline state from causing this unit test
+    # to skip execution.
+    monkeypatch.setattr(
+        pipeline_scheduler,
+        "load_state",
+        lambda: None,
+    )
+
     executions = []
 
     def fake_pipeline():
@@ -108,8 +126,10 @@ def test_scheduler_stops_after_pipeline_failure(monkeypatch):
     assert result["runs"] == 1
     assert result["failures"] == 1
 
+
 def test_scheduler_retries_failed_pipeline_then_succeeds(monkeypatch):
     executions = []
+
     states = [
         {
             "last_status": "FAILED",

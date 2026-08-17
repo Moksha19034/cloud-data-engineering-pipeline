@@ -13,3 +13,4 @@ logs/*
 .vscode/
 data/staging/*
 data/audit/*
+data/

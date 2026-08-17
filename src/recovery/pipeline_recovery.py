@@ -36,4 +36,3 @@ def should_skip_run(state):
         return False
 
     return state.get("last_status") == "SUCCESS"
-
