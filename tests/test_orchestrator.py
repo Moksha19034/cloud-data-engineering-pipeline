@@ -144,3 +144,140 @@ def test_run_pipeline_includes_quality_metrics(monkeypatch):
     assert result["status"] == "SUCCESS"
 
     assert result["quality_metrics"] == quality_metrics
+
+def test_run_stage_with_retry_success(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_stage(
+        stage_name,
+        script_path,
+    ):
+        calls.append(1)
+
+        return 0.5
+
+    monkeypatch.setattr(
+        orchestrator,
+        "run_stage",
+        fake_run_stage,
+    )
+
+    result = (
+        orchestrator
+        .run_stage_with_retry(
+            "POST INGESTION",
+            "fake.py",
+        )
+    )
+
+    assert result["status"] == "SUCCESS"
+    assert result["result"] == 0.5
+    assert result["attempts"] == 1
+    assert result["retries"] == 0
+    assert len(calls) == 1
+
+
+def test_run_stage_with_retry_retries_ingestion(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_stage(
+        stage_name,
+        script_path,
+    ):
+        calls.append(1)
+
+        if len(calls) < 3:
+            raise RuntimeError(
+                "temporary failure"
+            )
+
+        return 0.7
+
+    sleep_calls = []
+
+    monkeypatch.setattr(
+        orchestrator,
+        "run_stage",
+        fake_run_stage,
+    )
+
+    result = (
+        orchestrator
+        .execute_with_retry
+    )
+
+    retry_result = (
+        orchestrator
+        .run_stage_with_retry(
+            "POST INGESTION",
+            "fake.py",
+        )
+    )
+
+    assert (
+        retry_result["status"]
+        == "SUCCESS"
+    )
+
+    assert (
+        retry_result["attempts"]
+        == 3
+    )
+
+    assert (
+        retry_result["retries"]
+        == 2
+    )
+
+    assert len(calls) == 3
+
+
+def test_run_stage_with_retry_does_not_retry_transformation(
+    monkeypatch,
+):
+    calls = []
+
+    def fake_run_stage(
+        stage_name,
+        script_path,
+    ):
+        calls.append(1)
+
+        raise RuntimeError(
+            "bad transformation"
+        )
+
+    monkeypatch.setattr(
+        orchestrator,
+        "run_stage",
+        fake_run_stage,
+    )
+
+    result = (
+        orchestrator
+        .run_stage_with_retry(
+            "POST TRANSFORMATION",
+            "fake.py",
+        )
+    )
+
+    assert (
+        result["status"]
+        == "FAILED"
+    )
+
+    assert (
+        result["attempts"]
+        == 1
+    )
+
+    assert (
+        result["retries"]
+        == 0
+    )
+
+    assert len(calls) == 1

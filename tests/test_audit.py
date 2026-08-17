@@ -86,18 +86,20 @@ def test_save_audit_record_appends_records(tmp_path):
     result = pd.read_parquet(audit_file)
 
     assert len(result) == 2
+
     assert result["run_id"].tolist() == [
         "run-001",
         "run-002",
     ]
 
+
 def test_create_audit_record_includes_metrics():
+
     stage_metrics = {
-        "total_stages": 9,
         "fastest_stage": "POST VALIDATION",
-        "fastest_duration": 0.4,
         "slowest_stage": "POST INGESTION",
-        "slowest_duration": 2.1,
+        "fastest_duration": 0.4,
+        "slowest_duration": 1.2,
     }
 
     quality_metrics = {
@@ -107,34 +109,177 @@ def test_create_audit_record_includes_metrics():
         "quality_status": "PASSED",
     }
 
+    retry_information = {
+        "POST INGESTION": {
+            "attempts": 2,
+            "retries": 1,
+        }
+    }
+
     record = pipeline_audit.create_audit_record(
-        run_id="metrics-test-001",
-        started_at="2026-08-16T14:00:00+00:00",
-        finished_at="2026-08-16T14:00:05+00:00",
+        run_id="metrics-run",
+        started_at="2026-08-12T10:00:00+00:00",
+        finished_at="2026-08-12T10:00:05+00:00",
         status="SUCCESS",
         total_duration=5.0,
         total_stages=9,
         successful_stages=9,
         stage_metrics=stage_metrics,
         quality_metrics=quality_metrics,
+        retry_information=retry_information,
     )
 
-    assert record["fastest_stage"] == (
-        "POST VALIDATION"
-    )
+    assert record["fastest_stage"] == "POST VALIDATION"
+    assert record["slowest_stage"] == "POST INGESTION"
 
     assert record["fastest_duration"] == 0.4
-
-    assert record["slowest_stage"] == (
-        "POST INGESTION"
-    )
-
-    assert record["slowest_duration"] == 2.1
+    assert record["slowest_duration"] == 1.2
 
     assert record["records_checked"] == 102
-
     assert record["null_values"] == 0
-
     assert record["duplicate_post_ids"] == 0
-
     assert record["quality_status"] == "PASSED"
+
+    assert record["total_retries"] == 1
+
+
+def test_get_total_retries():
+
+    retry_information = {
+        "POST INGESTION": {
+            "attempts": 3,
+            "retries": 2,
+        },
+        "USER INGESTION": {
+            "attempts": 1,
+            "retries": 0,
+        },
+    }
+
+    result = pipeline_audit.get_total_retries(
+        retry_information
+    )
+
+    assert result == 2
+
+
+def test_get_total_retries_empty():
+
+    result = pipeline_audit.get_total_retries({})
+
+    assert result == 0
+
+
+def test_create_audit_record_includes_retry_metrics():
+
+    retry_information = {
+        "POST INGESTION": {
+            "attempts": 3,
+            "retries": 2,
+        }
+    }
+
+    record = pipeline_audit.create_audit_record(
+        run_id="test-run-retry",
+        started_at="2026-08-17T10:00:00+00:00",
+        finished_at="2026-08-17T10:00:05+00:00",
+        status="SUCCESS",
+        total_duration=5.0,
+        total_stages=9,
+        successful_stages=9,
+        retry_information=retry_information,
+    )
+
+    assert record["total_retries"] == 2
+
+    assert (
+        "POST INGESTION"
+        in record["retry_information"]
+    )
+
+
+def test_save_audit_record_handles_existing_timestamp_schema(
+    tmp_path,
+):
+    audit_file = (
+        tmp_path
+        / "pipeline_runs.parquet"
+    )
+
+    pipeline_audit.AUDIT_FILE = audit_file
+
+    existing = pd.DataFrame(
+        [
+            {
+                "run_id": "old-run",
+                "started_at": pd.Timestamp(
+                    "2026-08-17T04:00:00+00:00"
+                ),
+                "finished_at": pd.Timestamp(
+                    "2026-08-17T04:00:05+00:00"
+                ),
+                "status": "SUCCESS",
+                "total_duration": 5.0,
+                "total_stages": 9,
+                "successful_stages": 9,
+            }
+        ]
+    )
+
+    existing.to_parquet(
+        audit_file,
+        index=False,
+    )
+
+    new_record = (
+        pipeline_audit
+        .create_audit_record(
+            run_id="new-run",
+            started_at=(
+                "2026-08-17T05:00:00+00:00"
+            ),
+            finished_at=(
+                "2026-08-17T05:00:05+00:00"
+            ),
+            status="SUCCESS",
+            total_duration=5.0,
+            total_stages=9,
+            successful_stages=9,
+            retry_information={
+                "POST INGESTION": {
+                    "attempts": 1,
+                    "retries": 0,
+                }
+            },
+        )
+    )
+
+    pipeline_audit.save_audit_record(
+        new_record
+    )
+
+    result = pd.read_parquet(
+        audit_file
+    )
+
+    assert len(result) == 2
+
+    assert (
+        result.iloc[0]["run_id"]
+        == "old-run"
+    )
+
+    assert (
+        result.iloc[1]["run_id"]
+        == "new-run"
+    )
+
+    assert isinstance(
+        result["started_at"].dtype,
+        pd.DatetimeTZDtype,
+    )
+
+    assert (
+        result.iloc[1]["total_retries"]
+        == 0
+    )
