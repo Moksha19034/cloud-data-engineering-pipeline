@@ -1,0 +1,22 @@
+FROM python:3.14-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN mkdir -p \
+    data/raw \
+    data/staging \
+    data/processed \
+    data/curated \
+    data/audit \
+    logs
+
+CMD ["python", "-m", "src.orchestration.orchestrator"]

@@ -6,7 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 
-DATA_FILE = Path("data/curated/posts.parquet")
+DATA_FILE = Path("data/staging/posts.parquet")
 
 
 def load_data():
