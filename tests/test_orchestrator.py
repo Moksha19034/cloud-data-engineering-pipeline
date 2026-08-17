@@ -281,3 +281,75 @@ def test_run_stage_with_retry_does_not_retry_transformation(
     )
 
     assert len(calls) == 1
+def test_run_pipeline_saves_success_state(monkeypatch):
+    saved_states = []
+
+    def fake_run_stage(stage_name, script_path):
+        return 1.0
+
+    def fake_save_state(state):
+        saved_states.append(state)
+
+    monkeypatch.setattr(
+        orchestrator,
+        "run_stage",
+        fake_run_stage,
+    )
+
+    monkeypatch.setattr(
+        orchestrator,
+        "save_state",
+        fake_save_state,
+    )
+
+    result = orchestrator.run_pipeline()
+
+    assert result["status"] == "SUCCESS"
+    assert len(saved_states) == 1
+
+    state = saved_states[0]
+
+    assert state["last_run_id"] == result["run_id"]
+    assert state["last_status"] == "SUCCESS"
+    assert "last_finished_at" in state
+
+
+def test_run_pipeline_saves_failure_state(monkeypatch):
+    saved_states = []
+
+    def fake_run_stage(stage_name, script_path):
+        if stage_name == "POST TRANSFORMATION":
+            raise RuntimeError(
+                "temporary transformation failure"
+            )
+
+        return 1.0
+
+    def fake_save_state(state):
+        saved_states.append(state)
+
+    monkeypatch.setattr(
+        orchestrator,
+        "run_stage",
+        fake_run_stage,
+    )
+
+    monkeypatch.setattr(
+        orchestrator,
+        "save_state",
+        fake_save_state,
+    )
+
+    result = orchestrator.run_pipeline()
+
+    assert result["status"] == "FAILED"
+    assert result["failed_stage"] == "POST TRANSFORMATION"
+
+    assert len(saved_states) == 1
+
+    state = saved_states[0]
+
+    assert state["last_run_id"] == result["run_id"]
+    assert state["last_status"] == "FAILED"
+    assert state["failed_stage"] == "POST TRANSFORMATION"
+    assert "last_finished_at" in state
