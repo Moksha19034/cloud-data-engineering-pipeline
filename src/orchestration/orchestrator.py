@@ -33,6 +33,10 @@ from src.logging.pipeline_logger import (
 
 from src.state.pipeline_state import save_state
 
+from src.cloud.s3_storage import (
+    upload_file,
+)
+
 from src.orchestration.failure_classifier import (
     is_retryable,
 )
@@ -266,6 +270,8 @@ def run_pipeline():
         - quality metrics
         - alerts
         - structured logs
+        - pipeline state
+        - analytics dataset in S3
     """
 
     run_id = generate_run_id()
@@ -357,8 +363,6 @@ def run_pipeline():
                 "result"
             ]
 
-            # Use the duration returned by
-            # the actual stage execution.
             stage_durations[
                 stage_name
             ] = duration
@@ -368,6 +372,22 @@ def run_pipeline():
                 f"{stage_name} "
                 f"duration={stage_elapsed:.3f}s"
             )
+
+            # ---------------------------------------------
+            # UPLOAD ANALYTICS DATASET TO S3
+            # ---------------------------------------------
+
+            if stage_name == "ANALYTICS DATASET":
+
+                s3_uri = upload_file(
+                    "data/curated/post_user_analytics.parquet",
+                    "curated/post_user_analytics.parquet",
+                )
+
+                logger.info(
+                    "Analytics dataset uploaded "
+                    f"to S3: {s3_uri}"
+                )
 
         # =================================================
         # PIPELINE SUCCESS
@@ -479,6 +499,10 @@ def run_pipeline():
             run_id=run_id,
             stage_durations=stage_durations,
         )
+
+        # =================================================
+        # SAVE SUCCESS STATE
+        # =================================================
 
         save_state(
             {
@@ -615,6 +639,10 @@ def run_pipeline():
             stage_durations=stage_durations,
         )
 
+        # =================================================
+        # SAVE FAILURE STATE
+        # =================================================
+
         save_state(
             {
                 "last_run_id": run_id,
@@ -713,7 +741,7 @@ def main():
             f"Records checked: "
             f"{quality_metrics.get(
                 'records_checked',
-                0
+                0,
             )}"
         )
 
@@ -721,7 +749,7 @@ def main():
             f"Null values: "
             f"{quality_metrics.get(
                 'null_values',
-                0
+                0,
             )}"
         )
 
@@ -729,7 +757,7 @@ def main():
             f"Duplicate post IDs: "
             f"{quality_metrics.get(
                 'duplicate_post_ids',
-                0
+                0,
             )}"
         )
 
@@ -737,7 +765,7 @@ def main():
             f"Quality status: "
             f"{quality_metrics.get(
                 'quality_status',
-                'UNKNOWN'
+                'UNKNOWN',
             )}"
         )
 
